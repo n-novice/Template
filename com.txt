@@ -1,0 +1,9 @@
+squidclient localhost mgr:squidaio_counts
+
+
+
+
+
+
+
+  
