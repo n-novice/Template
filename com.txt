@@ -7,7 +7,7 @@ squidclient localhost mgr:counters
 squidclient localhost mgr:digest_stats
 →リクエスト数
 
-
+squidclient localhost mgr:mem
 ーー
 squidclient localhost mgr:filedescriptors
 
