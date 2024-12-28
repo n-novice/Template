@@ -1,8 +1,33 @@
+■統計
+squidclient localhost mgr:info
+
+squidclient localhost mgr:counters
+→各counter簡素表示
+
+squidclient localhost mgr:digest_stats
+→リクエスト数
+
+
+ーー
+squidclient localhost mgr:filedescriptors
+
 squidclient localhost mgr:squidaio_counts
 
+squidclient localhost mgr:client_list
 
+squidclient localhost mgr:active_requests
+squidclient localhost mgr:username_cache
+squidclient localhost mgr:storedir
+squidclient localhost mgr:store_io
+squidclient localhost mgr:forward
 
+■名前解決関連
+squidclient localhost mgr:idns
+→つかったDNS？
+squidclient localhost mgr:ipcache
+→DNSキャッシュしている情報？
 
+squidclient localhost mgr:fqdncache
 
 
 
