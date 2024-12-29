@@ -1,0 +1,247 @@
+1.Proxyへログイン
+2.rootユーザに
+　　 su - 
+
+3.ディレクトリ作成
+　　mkdir /etc/zabbix/script
+
+4.スクリプト作成
+ vi count_squid_connections.sh
+
+====================================================================
+
+#!/bin/bash
+#
+# File name: count_squid_connections.sh
+# Usage:     ./count_squid_connections.sh
+#
+# 概要:
+#   1) squidプロセスのクライアント接続/サーバ接続を集計 (client_active/total, server_active/total)
+#   2) プロセスに関係なく全通信を対象に、ローカルアドレス単位で active/total を集計
+#      (ポート枯渇確認などが目的)
+#
+# 修正ポイント:
+#   - IPv6の [::xxxx]、 `*:8080` (アスタリスク)などを連想配列のキーとして扱えるように変換
+#   - 未定義の値があれば 0 を補完
+
+#=== 監視対象として扱う "squidの待ち受け用IP" と "ポート" ===
+ips=( "10.0.0.1" "10.0.0.2" "192.168.100.211" )
+ports=(8080 8180 8280)
+
+#----------------------------------------------------------------------
+# (A) squidプロセス向けの4つの集計変数
+#----------------------------------------------------------------------
+client_active=0
+client_total=0
+server_active=0
+server_total=0
+
+# IP:Portごとの詳細（クライアント接続だけ必要）
+declare -A client_active_counts
+declare -A client_total_counts
+
+# 初期化
+for ip in "${ips[@]}"; do
+  for port in "${ports[@]}"; do
+    client_active_counts["$ip:$port"]=0
+    client_total_counts["$ip:$port"]=0
+  done
+done
+
+#----------------------------------------------------------------------
+# (B) サーバ全体(プロセス問わず)のローカルアドレス別TCP集計
+#----------------------------------------------------------------------
+declare -A serverwide_active_counts
+declare -A serverwide_total_counts
+
+#----------------------------------------------------------------------
+# (C) ssコマンド結果を読み込み
+#     １回のループで (A) と (B) の集計を同時に実施
+#----------------------------------------------------------------------
+while IFS= read -r line
+do
+  # 見出し行などフィールド数が足りない行はスキップ
+  field_count=$(echo "$line" | awk '{print NF}')
+  if [ "$field_count" -lt 4 ]; then
+    continue
+  fi
+
+  # 1列目: TCP STATE, 4列目: Local Address:Port
+  state=$(echo "$line" | awk '{print $1}')
+  local_addr_port=$(echo "$line" | awk '{print $4}')
+
+  # (C)-1. [::ffff:x.x.x.x]:port 等を取り除く (先頭 [::ffff:...])
+  local_addr_port=$(echo "$local_addr_port" | sed -E 's/^\[::ffff:([^]]+)\]/\1/')
+  # もし [::] や [fe80::1]:22 なども取り除き
+  local_addr_port=$(echo "$local_addr_port" | sed -E 's/^\[([^]]+)\]/\1/')
+
+  # (C)-2. IP部・ポート部に分割
+  local_ip=$(echo "$local_addr_port" | awk -F':' '{OFS=":"; NF--; print $0}')
+  local_port=$(echo "$local_addr_port" | awk -F':' '{print $NF}')
+
+  #--------------------------------------------------
+  # ここが今回の修正点:
+  #   local_ip が "*" や "" (空) の場合に "ANY" 等に変換
+  #   "::" のように特殊文字の場合も、必要に応じて置換
+  #--------------------------------------------------
+  if [[ -z "$local_ip" ]]; then
+    # 空なら UNDEF など
+    local_ip="UNKNOWN"
+  fi
+  if [[ "$local_ip" == "*" ]]; then
+    local_ip="ANY"
+  fi
+  if [[ "$local_ip" == "::" ]]; then
+    local_ip="IPV6_ANY"
+  fi
+
+  # (C)-3. アクティブ判定 (ESTAB/ESTABLISHED)
+  is_active=0
+  if [[ "$state" == "ESTAB" || "$state" == "ESTABLISHED" ]]; then
+    is_active=1
+  fi
+
+  #----------------------------------------------------------------------
+  # (B) サーバ全体の集計 (プロセス問わず)
+  #----------------------------------------------------------------------
+  # 全ステートを total にカウント
+  ((serverwide_total_counts["$local_ip"]++))
+
+  # アクティブ(ESTAB/ESTABLISHED)を active にカウント
+  if [[ $is_active -eq 1 ]]; then
+    ((serverwide_active_counts["$local_ip"]++))
+  fi
+
+  #----------------------------------------------------------------------
+  # (A) squidプロセスのクライアント/サーバ接続カウント
+  #----------------------------------------------------------------------
+  if [[ "$line" =~ squid ]]; then
+    # client or server?
+    is_client=0
+    for ip_chk in "${ips[@]}"; do
+      for pt_chk in "${ports[@]}"; do
+        if [[ "$local_ip" == "$ip_chk" && "$local_port" == "$pt_chk" ]]; then
+          is_client=1
+          break 2
+        fi
+      done
+    done
+
+    if [[ $is_client -eq 1 ]]; then
+      # クライアント接続
+      ((client_total++))
+      ((client_total_counts["$local_ip:$local_port"]++))
+
+      if [[ $is_active -eq 1 ]]; then
+        ((client_active++))
+        ((client_active_counts["$local_ip:$local_port"]++))
+      fi
+    else
+      # サーバ接続
+      ((server_total++))
+      if [[ $is_active -eq 1 ]]; then
+        ((server_active++))
+      fi
+    fi
+  fi
+
+done < <(sudo ss -antp)
+
+#----------------------------------------------------------------------
+# (D) JSON形式で出力
+#----------------------------------------------------------------------
+json="{"
+json+="\"client_active\":$client_active,"
+json+="\"client_total\":$client_total,"
+json+="\"server_active\":$server_active,"
+json+="\"server_total\":$server_total,"
+
+# client_detail
+json+="\"client_detail\":{"
+first=1
+for ip in "${ips[@]}"; do
+  for port in "${ports[@]}"; do
+    key="$ip:$port"
+    active_val="${client_active_counts[$key]}"
+    total_val="${client_total_counts[$key]}"
+
+    # 未定義なら0を補完
+    if [[ -z "$active_val" ]]; then active_val=0; fi
+    if [[ -z "$total_val" ]]; then total_val=0; fi
+
+    if [[ $first -eq 0 ]]; then
+      json+=","
+    else
+      first=0
+    fi
+
+    json+="\"$key\":{\"active\":$active_val,\"total\":$total_val}"
+  done
+done
+json+="},"
+
+# serverwide_detail
+json+="\"serverwide_detail\":{"
+first=1
+for ip_key in "${!serverwide_total_counts[@]}"; do
+  active_val="${serverwide_active_counts[$ip_key]}"
+  total_val="${serverwide_total_counts[$ip_key]}"
+
+  if [[ -z "$active_val" ]]; then active_val=0; fi
+  if [[ -z "$total_val" ]]; then total_val=0; fi
+
+  if [[ $first -eq 0 ]]; then
+    json+=","
+  else
+    first=0
+  fi
+
+  json+="\"$ip_key\":{\"active\":$active_val,\"total\":$total_val}"
+done
+json+="}"
+
+json+="}"
+
+echo "$json"
+exit 0
+
+====================================================================
+
+
+
+5.実行権限付与、所有者変更
+ chonw zabbix;zabbix count_squid_connections.sh
+ chmod +x count_squid_connections.sh
+
+6.zabbixユーザの実行権付与
+ visudo
+
+====================================================================
+## Allows members of the users group to shutdown this system
+zabbix ALL=(ALL) NOPASSWD: /etc/zabbix/script/count_squid_connections.sh
+zabbix ALL=(ALL) NOPASSWD: /usr/sbin/ss
+====================================================================
+
+7.Agent設定追加
+ vi /etc/zabbix/zabbix_agentd.d/squid.conf
+
+====================================================================
+# 接続数
+UserParameter=proxy.connections,/etc/zabbix/script/count_squid_connections.sh
+====================================================================
+
+8.agent再起動
+  systemctl status zabbix-agent
+  systemctl restart zabbix-agent
+  systemctl status zabbix-agent
+
+
+9.
+
+
+10.
+
+
+11.
+
+
