@@ -235,13 +235,16 @@ UserParameter=proxy.connections,/etc/zabbix/script/count_squid_connections.sh
   systemctl restart zabbix-agent
   systemctl status zabbix-agent
 
+======================================================================================================
+======================================================================================================
+9.Zabbixサーバログイン
 
-9.
+10.設定編集
+ vi /etc/zabbix/zabbix-server.conf
+ timeout = 30 
 
-
-10.
-
-
-11.
-
+11.再起動
+  systemctl status zabbix-server
+  systemctl start zabbix-server
+  systemctl status zabbix-server
 
