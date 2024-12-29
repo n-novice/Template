@@ -29,6 +29,13 @@ squidclient localhost mgr:ipcache
 
 squidclient localhost mgr:fqdncache
 
+===
+https://bugs.squid-cache.org/buglist.cgi?bug_status=UNCONFIRMED&bug_status=NEW&bug_status=ASSIGNED&bug_status=REOPENED&order=changeddate%20DESC%2Cbug_status%2Cpriority%2Cassigned_to%2Cbug_id&product=Squid&query_format=advanced&version=4
+
+https://bugs.squid-cache.org/buglist.cgi?bug_status=UNCONFIRMED&bug_status=NEW&bug_status=ASSIGNED&bug_status=REOPENED&bug_status=MOREINFO&field0-0-0=product&field0-0-1=component&field0-0-2=alias&field0-0-3=short_desc&field0-0-4=status_whiteboard&field0-0-5=content&no_redirect=1&order=changeddate%20DESC%2Cbug_status%2Cpriority%2Cassigned_to%2Cbug_id&query_format=advanced&type0-0-0=substring&type0-0-1=substring&type0-0-2=substring&type0-0-3=substring&type0-0-4=substring&type0-0-5=matches&value0-0-0=squid&value0-0-1=squid&value0-0-2=squid&value0-0-3=squid&value0-0-4=squid&value0-0-5=%22squid%22
+
+https://bugs.squid-cache.org/show_bug.cgi?id=5173
+
 
 
   
