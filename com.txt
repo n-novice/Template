@@ -36,6 +36,6 @@ https://bugs.squid-cache.org/buglist.cgi?bug_status=UNCONFIRMED&bug_status=NEW&b
 
 https://bugs.squid-cache.org/show_bug.cgi?id=5173
 
-
+https://www.insentragroup.com/us/insights/geek-speak/modern-workplace/joining-red-hat-systems-directly-to-multiple-active-directories-using-sssd/
 
   
