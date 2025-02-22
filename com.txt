@@ -38,4 +38,6 @@ https://bugs.squid-cache.org/show_bug.cgi?id=5173
 
 https://www.insentragroup.com/us/insights/geek-speak/modern-workplace/joining-red-hat-systems-directly-to-multiple-active-directories-using-sssd/
 
-  
+https://webhostinggeeks.com/howto/monitor-analyze-squid-proxy-server-logs/
+https://www.msxfaq.de/tools/3rdparty/squid_proxy_wsl_kerberos.htm
+https://wiki.squid-cache.org/SquidFaq/SquidLogs
